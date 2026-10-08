@@ -111,7 +111,14 @@
   </section>
 
 <section id="admin" class="card hidden">
-    <h2>🎅 Utwórz losowanie</h2>
+    <h2>🎅 Panel organizatora</h2>
+    <div class="notice">
+      <b>Twoje zapisane losowania</b>
+      <div class="small">Otwórz wcześniejsze losowanie albo usuń testowe, których już nie potrzebujesz.</div>
+      <div id="savedGames" style="margin-top:12px">Wczytywanie zapisanych losowań…</div>
+      <button class="secondary" onclick="loadSavedGames()">↻ Odśwież listę</button>
+    </div>
+    <h2 style="margin-top:24px">＋ Utwórz nowe losowanie</h2>
     <label>Nazwa losowania</label>
     <input id="gameName" value="Świąteczne losowanie" placeholder="np. Święta 2026">
 
@@ -238,16 +245,67 @@ async function loginAdmin(){
     const ok=Array.isArray(data)?data[0]:data;
     if(ok===true){
       sessionStorage.setItem("organizer_authenticated","1");
+      window.organizerPasswordForSession=password;
       document.getElementById("organizerPassword").value="";
       document.getElementById("adminLogin").classList.add("hidden");
       document.getElementById("admin").classList.remove("hidden");
       clearMessage();
+      await loadSavedGames();
     }else{
       message("Nieprawidłowe hasło.",true);
     }
   }catch(e){
     message("Nie udało się sprawdzić hasła: "+e.message,true);
   }
+}
+
+async function loadSavedGames(){
+  const box=document.getElementById("savedGames");
+  box.innerHTML="Wczytywanie…";
+  try{
+    const password=window.organizerPasswordForSession;
+    if(!password){box.innerHTML='<div class="small">Zaloguj się ponownie, aby wczytać zapisane losowania.</div>';return;}
+    const data=await rpc("list_my_games",{p_admin_password:password});
+    const games=Array.isArray(data)?data:[];
+    if(!games.length){box.innerHTML='<div class="small">Nie ma jeszcze zapisanych losowań.</div>';return;}
+    box.innerHTML=games.map(g=>`
+      <div class="participant">
+        <span><b>${escapeHtml(g.name)}</b><br><span class="family">${new Date(g.created_at).toLocaleString("pl-PL")}</span></span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
+          <button class="secondary smallbtn" onclick="removeSavedGame('${g.id}','${escapeHtml(g.name).replace(/'/g,"&#039;")}')">🗑️ Usuń</button>
+        </span>
+      </div>`).join("");
+  }catch(e){box.innerHTML='<div class="notice error">Nie udało się wczytać listy: '+escapeHtml(e.message)+'</div>';}
+}
+
+async function openSavedGame(id){
+  const code=prompt("Wpisz kod administratora dla tego losowania:");
+  if(code===null)return;
+  try{
+    const data=await rpc("get_participants",{p_game_id:id,p_admin_code:code});
+    gameId=id;adminCode=code;participants=data||[];
+    document.getElementById("adminCode").value=code;
+    const name=(await rpc("get_game_name",{p_game_id:id,p_admin_code:code}));
+    document.getElementById("gameName").value=Array.isArray(name)?name[0]:name;
+    document.getElementById("adminPanel").classList.remove("hidden");
+    const url=new URL(location.href);url.search="";url.hash="game="+gameId;
+    document.getElementById("shareLink").textContent=url.toString();
+    await refreshParticipants();
+    message("Otwarto zapisane losowanie.");
+  }catch(e){message("Nie udało się otworzyć losowania. Sprawdź kod administratora. "+e.message,true);}
+}
+
+async function removeSavedGame(id,name){
+  if(!confirm(`Czy na pewno usunąć całe losowanie „${name}” wraz z uczestnikami? Tej operacji nie można cofnąć.`))return;
+  const password=window.organizerPasswordForSession;
+  if(!password){message("Zaloguj się ponownie.",true);return;}
+  try{
+    await rpc("delete_game",{p_game_id:id,p_admin_password:password});
+    message("Usunięto losowanie: "+escapeHtml(name));
+    if(gameId===id){gameId=null;adminCode=null;participants=[];document.getElementById("adminPanel").classList.add("hidden");}
+    await loadSavedGames();
+  }catch(e){message("Nie udało się usunąć losowania: "+e.message,true);}
 }
 
 async function createGame(){
