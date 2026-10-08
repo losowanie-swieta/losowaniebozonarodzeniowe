@@ -37,6 +37,7 @@
     .primary{background:var(--accent);color:white}.green{background:var(--accent2);color:white}.secondary{background:#e9e5dc;color:var(--text)}
     button:disabled{opacity:.55;cursor:not-allowed}
     .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1}
+    .smallbtn{font-size:12px;padding:7px 9px;min-height:auto}
     .participant{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
     .participant:last-child{border-bottom:0}
     .family{font-size:13px;color:var(--muted)}
@@ -280,6 +281,33 @@ async function addParticipant(){
   }catch(e){message("Nie udało się dodać uczestnika: "+e.message,true);}
 }
 
+async function editParticipant(id){
+  const p=participants.find(x=>String(x.id)===String(id));
+  if(!p){message("Nie znaleziono uczestnika.",true);return;}
+  const name=prompt("Zmień imię / nazwę uczestnika:",p.name);
+  if(name===null)return;
+  const cleanName=name.trim();
+  if(!cleanName){message("Imię nie może być puste.",true);return;}
+  const family=prompt("Zmień rodzinę / parę (zostaw puste, jeśli brak):",p.family||"");
+  if(family===null)return;
+  try{
+    await rpc("update_participant",{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id,p_name:cleanName,p_family:family.trim()||null});
+    await refreshParticipants();
+    message("Dane uczestnika zostały zmienione.");
+  }catch(e){message("Nie udało się zmienić uczestnika: "+e.message,true);}
+}
+
+async function deleteParticipant(id){
+  const p=participants.find(x=>String(x.id)===String(id));
+  if(!p)return;
+  if(!confirm(`Czy na pewno usunąć uczestnika „${p.name}”?`))return;
+  try{
+    await rpc("delete_participant",{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id});
+    await refreshParticipants();
+    message("Uczestnik został usunięty.");
+  }catch(e){message("Nie udało się usunąć uczestnika: "+e.message,true);}
+}
+
 async function refreshParticipants(){
   const data=await rpc("get_participants",{p_game_id:gameId,p_admin_code:adminCode});
   participants=data||[];
@@ -288,7 +316,14 @@ async function refreshParticipants(){
     box.innerHTML='<div class="small">Nie dodano jeszcze uczestników.</div>';
   } else {
     box.innerHTML=participants.map((p,i)=>
-      `<div class="participant"><span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:""}</span><span>#${i+1}</span></div>`
+      `<div class="participant">
+        <span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:""}</span>
+        <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <span>#${i+1}</span>
+          <button class="secondary smallbtn" onclick="editParticipant('${p.id}')">✏️ Edytuj</button>
+          <button class="secondary smallbtn" onclick="deleteParticipant('${p.id}')">🗑️ Usuń</button>
+        </span>
+      </div>`
     ).join("");
   }
   document.getElementById("drawBtn").disabled=participants.length<2;
@@ -376,7 +411,12 @@ async function getResult(){
     await new Promise(resolve=>setTimeout(resolve,5000));
     resultBox.innerHTML=
       `<div class="result revealed">🎁 ${escapeHtml(row.assigned_name)} 🎁</div>
-       <div style="text-align:center">To dla tej osoby przygotuj prezent.<br><b>🤫 Nie zdradzaj wyniku!</b></div>`;
+       <div style="text-align:center;font-size:18px;line-height:1.7">
+         Cześć ${escapeHtml(row.participant_name||"")},<br>
+         w tym roku jesteś Mikołajem dla:<br>
+         <b style="font-size:24px;color:var(--accent)">${escapeHtml(row.assigned_name)}</b>
+         <br>Przygotuj tej osobie świąteczny prezent!<br><b>🤫 Nie zdradzaj wyniku!</b>
+       </div>`;
     button.textContent="🎉 WYLOSOWANO";
   }catch(e){
     resultBox.innerHTML="";
