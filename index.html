@@ -49,12 +49,22 @@
 
   <div id="home" class="card">
     <div class="tabs">
-      <button class="primary" onclick="show('admin')">Organizator</button>
+      <button class="primary" onclick="openAdminLogin()">Organizator</button>
       <button class="secondary" onclick="show('join')">Uczestnik</button>
     </div>
   </div>
 
-  <section id="admin" class="card hidden">
+  
+  <section id="adminLogin" class="card hidden">
+    <h2>🔐 Panel organizatora</h2>
+    <div class="small">Podaj hasło organizatora, aby wejść do panelu.</div>
+    <label>Hasło</label>
+    <input id="organizerPassword" type="password" autocomplete="current-password" placeholder="Wpisz hasło">
+    <button class="primary" onclick="loginAdmin()">ZALOGUJ</button>
+    <button class="secondary" onclick="showHome()">Anuluj</button>
+  </section>
+
+<section id="admin" class="card hidden">
     <h2>🎅 Utwórz losowanie</h2>
     <label>Nazwa losowania</label>
     <input id="gameName" value="Świąteczne losowanie" placeholder="np. Święta 2026">
@@ -87,9 +97,16 @@
 
       <div id="participants" style="margin-top:14px"></div>
 
+      <div id="linksPanel" class="hidden">
+        <h3>🔗 Indywidualne linki</h3>
+        <div class="small">Po losowaniu każdy uczestnik powinien dostać tylko swój link.</div>
+        <div id="privateLinks"></div>
+      </div>
+
       <button id="drawBtn" class="primary" onclick="drawGame()" disabled>🎲 ROZPOCZNIJ LOSOWANIE</button>
       <div class="small" style="margin-top:8px">
         Osoby oznaczone tą samą nazwą rodziny/pary nie będą mogły wylosować siebie nawzajem.
+        Wynik uczestnika jest dostępny wyłącznie przez jego indywidualny link.
       </div>
     </div>
   </section>
@@ -135,8 +152,10 @@ function scalar(data){
 }
 
 function show(id){
-  document.getElementById("admin").classList.toggle("hidden", id!=="admin");
+  document.getElementById("admin").classList.add("hidden");
+  document.getElementById("adminLogin").classList.add("hidden");
   document.getElementById("join").classList.toggle("hidden", id!=="join");
+  document.getElementById("home").classList.toggle("hidden", id==="join");
   clearMessage();
   if(id==="join") loadParticipantsForJoin();
 }
@@ -146,6 +165,44 @@ function message(text, error=false){
   el.innerHTML=`<div class="notice ${error?'error':''}">${text}</div>`;
 }
 function clearMessage(){document.getElementById("message").innerHTML="";}
+
+
+function openAdminLogin(){
+  document.getElementById("home").classList.add("hidden");
+  document.getElementById("join").classList.add("hidden");
+  document.getElementById("admin").classList.add("hidden");
+  document.getElementById("adminLogin").classList.remove("hidden");
+  document.getElementById("organizerPassword").focus();
+  clearMessage();
+}
+
+function showHome(){
+  document.getElementById("adminLogin").classList.add("hidden");
+  document.getElementById("admin").classList.add("hidden");
+  document.getElementById("join").classList.add("hidden");
+  document.getElementById("home").classList.remove("hidden");
+  clearMessage();
+}
+
+async function loginAdmin(){
+  const password=document.getElementById("organizerPassword").value;
+  if(!password){message("Wpisz hasło organizatora.",true);return;}
+  try{
+    const data=await rpc("verify_admin_password",{p_password:password});
+    const ok=Array.isArray(data)?data[0]:data;
+    if(ok===true){
+      sessionStorage.setItem("organizer_authenticated","1");
+      document.getElementById("organizerPassword").value="";
+      document.getElementById("adminLogin").classList.add("hidden");
+      document.getElementById("admin").classList.remove("hidden");
+      clearMessage();
+    }else{
+      message("Nieprawidłowe hasło.",true);
+    }
+  }catch(e){
+    message("Nie udało się sprawdzić hasła: "+e.message,true);
+  }
+}
 
 async function createGame(){
   clearMessage();
@@ -182,8 +239,9 @@ async function refreshParticipants(){
   const data=await rpc("get_participants",{p_game_id:gameId,p_admin_code:adminCode});
   participants=data||[];
   const box=document.getElementById("participants");
-  if(!participants.length){box.innerHTML='<div class="small">Nie dodano jeszcze uczestników.</div>';}
-  else{
+  if(!participants.length){
+    box.innerHTML='<div class="small">Nie dodano jeszcze uczestników.</div>';
+  } else {
     box.innerHTML=participants.map((p,i)=>
       `<div class="participant"><span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:""}</span><span>#${i+1}</span></div>`
     ).join("");
@@ -191,39 +249,67 @@ async function refreshParticipants(){
   document.getElementById("drawBtn").disabled=participants.length<2;
 }
 
+async function showPrivateLinks(){
+  try{
+    const data=await rpc("get_participant_links",{p_game_id:gameId,p_admin_code:adminCode});
+    const box=document.getElementById("privateLinks");
+    const base=new URL(location.href);
+    base.search="";
+    if(!data || !data.length){
+      box.innerHTML='<div class="small">Brak linków.</div>';
+      return;
+    }
+    box.innerHTML=data.map(p=>{
+      const url=new URL(base.toString());
+      url.hash="token="+p.access_token;
+      return `<div class="participant" style="display:block">
+        <b>${escapeHtml(p.name)}</b>
+        <div class="linkbox">${escapeHtml(url.toString())}</div>
+        <button class="secondary" onclick="copyText('${url.toString().replace(/'/g,"\\'")}')">📋 Kopiuj</button>
+      </div>`;
+    }).join("");
+    document.getElementById("linksPanel").classList.remove("hidden");
+  }catch(e){
+    message("Nie udało się przygotować indywidualnych linków: "+e.message,true);
+  }
+}
+
+function copyText(text){
+  navigator.clipboard?.writeText(text).then(()=>message("📋 Link został skopiowany."));
+}
+
 async function drawGame(){
   if(!confirm("Czy na pewno rozpocząć losowanie? Po rozpoczęciu wyniki zostaną ustalone.")) return;
   try{
     await rpc("draw_game",{p_game_id:gameId,p_admin_code:adminCode});
-    message("🎉 Losowanie zakończone! Możesz teraz wysłać uczestnikom link.");
+    message("🎉 Losowanie zakończone! Każdy uczestnik ma teraz własny, prywatny link.");
     document.getElementById("drawBtn").disabled=true;
+    await showPrivateLinks();
   }catch(e){message("Nie udało się wykonać losowania: "+e.message,true);}
 }
 
 async function loadParticipantsForJoin(){
   const params=new URLSearchParams(location.hash.replace(/^#/,""));
-  gameId=params.get("game");
-  if(!gameId){
-    document.getElementById("participantSelect").innerHTML='<option value="">Brak kodu losowania w linku</option>';
+  const token=params.get("token");
+  const select=document.getElementById("participantSelect");
+  if(!token){
+    select.innerHTML='<option value="">Brak indywidualnego linku</option>';
+    document.getElementById("joinInfo").textContent="Poproś organizatora o swój indywidualny link.";
     return;
   }
-  try{
-    const data=await rpc("get_participant_list",{p_game_id:gameId});
-    const select=document.getElementById("participantSelect");
-    select.innerHTML='<option value="">— wybierz swoje imię —</option>'+
-      (data||[]).map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
-    document.getElementById("joinInfo").textContent="Wybierz swoje imię. Wynik zobaczysz tylko Ty.";
-  }catch(e){
-    document.getElementById("joinInfo").textContent="Nie znaleziono tego losowania.";
-    message("Nie udało się pobrać listy uczestników.",true);
-  }
+  select.classList.add("hidden");
+  document.querySelector('#join label').classList.add("hidden");
+  const button=document.querySelector('#join button');
+  button.textContent="🎁 Pokaż mój wynik";
+  document.getElementById("joinInfo").textContent="Ten link jest przypisany do jednego uczestnika. Nikt inny nie powinien go otrzymać.";
+  window.privateToken=token;
 }
 
 async function getResult(){
-  const id=document.getElementById("participantSelect").value;
-  if(!id){message("Najpierw wybierz swoje imię.",true);return;}
+  const token=window.privateToken;
+  if(!token){message("Brak prawidłowego indywidualnego linku.",true);return;}
   try{
-    const data=await rpc("get_result",{p_game_id:gameId,p_participant_id:id});
+    const data=await rpc("get_result_by_token",{p_access_token:token});
     const row=Array.isArray(data)?data[0]:data;
     if(!row || !row.assigned_name){
       document.getElementById("result").innerHTML='<div class="notice">Losowanie nie zostało jeszcze przeprowadzone.</div>';
@@ -232,7 +318,8 @@ async function getResult(){
     document.getElementById("result").innerHTML=
       `<div class="result">🎁 ${escapeHtml(row.assigned_name)} 🎁</div>
        <div style="text-align:center">To dla tej osoby przygotuj prezent.<br><b>🤫 Nie zdradzaj wyniku!</b></div>`;
-  }catch(e){message("Nie udało się pobrać wyniku. Czy losowanie zostało już rozpoczęte?",true);}
+    document.querySelector('#join button').disabled=true;
+  }catch(e){message("Nie udało się pobrać wyniku. Sprawdź, czy link jest prawidłowy i czy losowanie zostało rozpoczęte.",true);}
 }
 
 function copyLink(){
@@ -244,7 +331,7 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
 
-if(location.hash.startsWith("#game=")){
+if(location.hash.startsWith("#token=")){
   show("join");
   loadParticipantsForJoin();
 }
