@@ -21,10 +21,24 @@
       background-attachment:fixed;
     }
     .wrap{max-width:760px;margin:0 auto;padding:24px 16px 50px}
-    .hero{text-align:center;padding:20px 0 14px;color:#fff8e8}
-    .hero .icon{font-size:54px;filter:drop-shadow(0 5px 12px rgba(0,0,0,.22))}
-    .hero .subtitle{color:#f1e4c6}
-    .hero h1{letter-spacing:.2px;text-shadow:0 2px 14px rgba(0,0,0,.3)}
+    .hero{text-align:center;padding:0 0 14px;color:#fff8e8;position:relative}
+    .hero-art{min-height:250px;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:34px 18px 30px;border:1px solid rgba(238,208,135,.55);border-radius:24px;overflow:hidden;position:relative;background:linear-gradient(180deg,rgba(5,27,20,.26),rgba(5,27,20,.88)),url('https://images.unsplash.com/photo-1543255006-d6395b6f1171?auto=format&fit=crop&w=1600&q=85') center 48%/cover;box-shadow:0 16px 44px rgba(0,0,0,.32)}
+    .hero-art:before{content:"";position:absolute;inset:10px;border:1px solid rgba(238,208,135,.35);border-radius:17px;pointer-events:none}
+    .hero .icon{font-size:44px;filter:drop-shadow(0 5px 12px rgba(0,0,0,.4));position:relative}
+    .hero .subtitle{color:#f1e4c6;position:relative;max-width:540px}
+    .hero h1{letter-spacing:.2px;text-shadow:0 2px 14px rgba(0,0,0,.55);position:relative}
+    .hero .faith-banner,.hero .gold-rule{position:relative}
+    .hero .hero-kicker{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#f2d998;font-weight:800;margin-top:8px;position:relative}
+    .hero .hero-ornament{font-size:20px;color:#f1d58e;letter-spacing:9px;margin-top:14px;position:relative}
+    .music-control{position:fixed;right:16px;bottom:16px;z-index:20;background:rgba(11,40,30,.96);color:#fff7e3;border:1px solid rgba(232,199,120,.75);border-radius:16px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.3);width:220px;backdrop-filter:blur(8px)}
+    .music-control .music-head{display:flex;align-items:center;gap:8px;justify-content:space-between;font-size:13px;font-weight:800}
+    .music-control button{margin:0;padding:8px 10px;font-size:13px;background:#c8a85d;color:#13291f;border-radius:10px}
+    .music-control input[type=range]{padding:0;margin:9px 0 0;height:18px;accent-color:#e4c26d}
+    .music-caption{font-size:11px;color:#e8d8af;margin-top:5px}
+    #snowLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:10}
+    .snowflake{position:absolute;top:-12px;color:#fff;opacity:.78;text-shadow:0 0 8px rgba(255,255,255,.7);animation:snowFall linear infinite}
+    @keyframes snowFall{to{transform:translate3d(var(--drift),110vh,0) rotate(360deg)}}
+    .decorative-strip{height:82px;border-radius:16px;margin:14px 0 4px;overflow:hidden;background:linear-gradient(90deg,rgba(9,40,29,.12),rgba(9,40,29,.3)),url('https://images.unsplash.com/photo-1512389142860-9c449e58a543?auto=format&fit=crop&w=1200&q=80') center 53%/cover;border:1px solid rgba(231,198,121,.35);box-shadow:0 8px 22px rgba(0,0,0,.18)}
     .card{background:rgba(255,250,240,.97);backdrop-filter:blur(5px)}
     .hero .icon{font-size:52px}
     h1{margin:6px 0;font-size:34px}
@@ -69,8 +83,12 @@
     @media(max-width:520px){
       h1{font-size:27px}
       .wrap{padding:12px 10px 30px}
-      .hero{padding:12px 0 8px}
-      .hero .icon{font-size:46px}
+      .hero{padding:8px 0 8px}
+      .hero-art{min-height:230px;padding:28px 14px;border-radius:18px}
+      .hero .icon{font-size:40px}
+      .music-control{right:10px;bottom:10px;width:190px;padding:9px 10px}
+      .music-control button{width:auto;min-height:0}
+      .decorative-strip{height:62px}
       .card{padding:16px;margin-top:12px;border-radius:16px}
       .row{flex-direction:column;gap:0}
       button{width:100%;min-height:46px}
@@ -84,12 +102,17 @@
 <body>
 <div class="wrap">
   <div class="hero">
-    <div class="icon">🎄🎁</div>
-    <h1>Świąteczne Losowanie</h1>
-    <div class="subtitle">Wylosuj osobę, dla której przygotujesz świąteczny prezent.</div>
-    <div class="faith-banner">✦ Boże Narodzenie · Pokój i dobro ✝</div>
-    <div class="gold-rule"></div>
+    <div class="hero-art">
+      <div class="hero-kicker">Czas bliskości i obdarowywania</div>
+      <div class="icon" aria-hidden="true">✦ 🎄 ✦</div>
+      <h1>Świąteczne Losowanie</h1>
+      <div class="subtitle">Wylosuj osobę, dla której przygotujesz wyjątkowy świąteczny prezent.</div>
+      <div class="faith-banner">✦ Boże Narodzenie · Pokój i dobro ✝</div>
+      <div class="gold-rule"></div>
+      <div class="hero-ornament" aria-hidden="true">❄ ✧ ❄ ✧ ❄</div>
+    </div>
   </div>
+  <div class="decorative-strip" role="img" aria-label="Świąteczna dekoracja z ciepłymi światełkami"></div>
 
   <div id="message"></div>
 
@@ -173,6 +196,13 @@
     <div id="result"></div>
   </section>
 </div>
+<div id="snowLayer" aria-hidden="true"></div>
+<aside class="music-control" aria-label="Muzyka świąteczna">
+  <div class="music-head"><span>♫ Muzyka świąteczna</span><button id="musicToggle" type="button" onclick="toggleMusic()">▶ Włącz</button></div>
+  <div class="music-caption" id="musicStatus">Instrumentalna melodia • bez słów</div>
+  <label for="musicVolume" style="font-size:11px;margin:7px 0 0;color:#f3e4c2;font-weight:600">Głośność</label>
+  <input id="musicVolume" type="range" min="0" max="100" value="22" aria-label="Głośność muzyki" oninput="setMusicVolume(this.value)">
+</aside>
 
 <script>
 const SUPABASE_URL = "https://adgzxpkfqfwsonesdjsx.supabase.co";
@@ -181,6 +211,57 @@ const SUPABASE_KEY = "sb_publishable_4B_vt1WsNKZOfcLp2aN0HQ_dspcQWX4";
 let gameId = null;
 let adminCode = null;
 let participants = [];
+
+// Delikatny, losowo rozmieszczony śnieg — bez zewnętrznych bibliotek.
+(function createSnow(){
+  const layer=document.getElementById("snowLayer");
+  if(!layer || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for(let i=0;i<34;i++){
+    const flake=document.createElement("span");
+    flake.className="snowflake";flake.textContent=i%4===0?"✦":"•";
+    flake.style.left=(Math.random()*100)+"%";
+    flake.style.fontSize=(7+Math.random()*10)+"px";
+    flake.style.animationDuration=(10+Math.random()*17)+"s";
+    flake.style.animationDelay=(-Math.random()*24)+"s";
+    flake.style.setProperty("--drift",(Math.random()*100-50)+"px");
+    layer.appendChild(flake);
+  }
+})();
+
+// Muzyka generowana lokalnie w przeglądarce: krótka instrumentalna melodia
+// w świątecznym stylu. Nie odtwarza cudzej ścieżki dźwiękowej.
+let musicContext=null, musicMaster=null, musicTimer=null, musicPlaying=false, musicStep=0;
+const holidayMelody=[
+  [392,0.34],[392,0.34],[392,0.68],[392,0.34],[392,0.34],[392,0.68],
+  [392,0.34],[494,0.34],[330,0.48],[349,0.2],[392,0.9],
+  [440,0.34],[440,0.34],[440,0.48],[440,0.2],[440,0.34],[392,0.34],[392,0.34],[392,0.2],[392,0.2],[392,0.34],[349,0.34],[349,0.34],[392,0.34],[349,0.68],[494,0.68]
+];
+function playMusicNote(){
+  if(!musicPlaying||!musicContext||!musicMaster)return;
+  const [freq,duration]=holidayMelody[musicStep%holidayMelody.length];musicStep++;
+  const now=musicContext.currentTime;
+  const osc=musicContext.createOscillator(), gain=musicContext.createGain();
+  osc.type="sine";osc.frequency.setValueAtTime(freq,now);
+  gain.gain.setValueAtTime(0.0001,now);gain.gain.exponentialRampToValueAtTime(0.16,now+0.035);gain.gain.exponentialRampToValueAtTime(0.0001,now+Math.max(.12,duration*.88));
+  osc.connect(gain);gain.connect(musicMaster);osc.start(now);osc.stop(now+duration);
+  // Cicha, ciepła nuta harmoniczna.
+  if(musicStep%3===0){const pad=musicContext.createOscillator(),pg=musicContext.createGain();pad.type="triangle";pad.frequency.value=freq/2;pg.gain.setValueAtTime(.0001,now);pg.gain.exponentialRampToValueAtTime(.035,now+.08);pg.gain.exponentialRampToValueAtTime(.0001,now+duration);pad.connect(pg);pg.connect(musicMaster);pad.start(now);pad.stop(now+duration+.02);}
+  musicTimer=setTimeout(playMusicNote,Math.max(260,duration*720));
+}
+async function toggleMusic(){
+  const btn=document.getElementById("musicToggle"),status=document.getElementById("musicStatus");
+  if(musicPlaying){musicPlaying=false;clearTimeout(musicTimer);if(musicMaster)musicMaster.gain.setTargetAtTime(0,musicContext.currentTime,.06);btn.textContent="▶ Włącz";status.textContent="Muzyka wyciszona";return;}
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx){status.textContent="Ta przeglądarka nie obsługuje muzyki";return;}
+    if(!musicContext){musicContext=new AudioCtx();musicMaster=musicContext.createGain();musicMaster.gain.value=(Number(document.getElementById("musicVolume").value)/100)*.22;musicMaster.connect(musicContext.destination);}
+    await musicContext.resume();musicMaster.gain.setTargetAtTime((Number(document.getElementById("musicVolume").value)/100)*.22,musicContext.currentTime,.08);
+    musicPlaying=true;btn.textContent="Ⅱ Wycisz";status.textContent="Gra instrumentalna melodia świąteczna";playMusicNote();
+  }catch(e){status.textContent="Nie udało się uruchomić muzyki w tej przeglądarce";}
+}
+function setMusicVolume(value){
+  if(musicMaster&&musicContext){const level=musicPlaying?(Number(value)/100)*.22:0;musicMaster.gain.setTargetAtTime(level,musicContext.currentTime,.06);}
+}
 
 function apiHeaders(){
   return {
