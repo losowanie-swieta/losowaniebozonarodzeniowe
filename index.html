@@ -6,17 +6,30 @@
   <title>Świąteczne Losowanie 🎁</title>
   <style>
     :root{
-      --bg:#f5f1e8; --card:#fffdf8; --text:#1d2a22; --muted:#68736d;
-      --accent:#a51d2d; --accent2:#176b45; --line:#ded8cc;
+      --bg:#0c241d; --card:#fffaf0; --text:#1d2a22; --muted:#68736d;
+      --accent:#9f1728; --accent2:#176b45; --line:#e2d6bd;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(135deg,#f5f1e8,#eef5ef);color:var(--text)}
+    body{
+      margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(224,184,91,.25), transparent 42%),
+        radial-gradient(circle at 12% 22%, rgba(255,255,255,.13) 0 1px, transparent 2px),
+        radial-gradient(circle at 80% 34%, rgba(255,255,255,.15) 0 1px, transparent 2px),
+        radial-gradient(circle at 28% 65%, rgba(255,255,255,.12) 0 1px, transparent 2px),
+        linear-gradient(145deg,#0b211b 0%,#153b2d 46%,#31131c 100%);
+      background-attachment:fixed;
+    }
     .wrap{max-width:760px;margin:0 auto;padding:24px 16px 50px}
-    .hero{text-align:center;padding:20px 0 14px}
+    .hero{text-align:center;padding:20px 0 14px;color:#fff8e8}
+    .hero .icon{font-size:54px;filter:drop-shadow(0 5px 12px rgba(0,0,0,.22))}
+    .hero .subtitle{color:#f1e4c6}
+    .hero h1{letter-spacing:.2px;text-shadow:0 2px 14px rgba(0,0,0,.3)}
+    .card{background:rgba(255,250,240,.97);backdrop-filter:blur(5px)}
     .hero .icon{font-size:52px}
     h1{margin:6px 0;font-size:34px}
     .subtitle{color:var(--muted);font-size:16px}
-    .card{background:rgba(255,253,248,.96);border:1px solid var(--line);border-radius:20px;padding:22px;margin-top:18px;box-shadow:0 10px 30px rgba(30,50,40,.08)}
+    .card{background:rgba(255,250,240,.97);backdrop-filter:blur(5px);border:1px solid rgba(232,211,164,.75);border-radius:20px;padding:22px;margin-top:18px;box-shadow:0 14px 38px rgba(0,0,0,.22)}
     h2{margin-top:0}
     label{display:block;font-weight:700;margin:14px 0 6px}
     input,select{width:100%;padding:13px 14px;border:1px solid #cfc8ba;border-radius:12px;font-size:16px;background:white}
@@ -34,7 +47,37 @@
     .linkbox{word-break:break-all;background:#f0eee8;padding:12px;border-radius:10px;margin-top:8px}
     .hidden{display:none}
     .tabs{display:flex;gap:8px;margin-bottom:8px}.tabs button{flex:1;margin:0}
-    @media(max-width:520px){h1{font-size:28px}.card{padding:17px}}
+
+    .faith-banner{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1px solid rgba(241,220,169,.55);border-radius:999px;background:rgba(255,248,226,.10);color:#f4dfad;font-size:13px;font-weight:700;margin-top:8px}
+    .gold-rule{width:96px;height:2px;margin:12px auto 0;background:linear-gradient(90deg,transparent,#e9c778,transparent)}
+    .draw-stage{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 10px}
+    .draw-gift{font-size:58px;line-height:1;display:inline-block}
+    .draw-gift.spinning{animation:giftRoll .18s linear infinite}
+    .draw-message{font-weight:800;color:var(--accent);text-align:center}
+    @keyframes giftRoll{
+      0%{transform:rotate(-12deg) scale(.92)}
+      50%{transform:rotate(12deg) scale(1.12)}
+      100%{transform:rotate(-12deg) scale(.92)}
+    }
+    @keyframes revealIn{
+      from{opacity:0;transform:translateY(12px) scale(.94)}
+      to{opacity:1;transform:translateY(0) scale(1)}
+    }
+    .result.revealed{animation:revealIn .45s ease-out}
+
+    @media(max-width:520px){
+      h1{font-size:27px}
+      .wrap{padding:12px 10px 30px}
+      .hero{padding:12px 0 8px}
+      .hero .icon{font-size:46px}
+      .card{padding:16px;margin-top:12px;border-radius:16px}
+      .row{flex-direction:column;gap:0}
+      button{width:100%;min-height:46px}
+      .tabs button{width:50%}
+      .result{font-size:27px}
+      input,select{font-size:16px}
+      .linkbox{font-size:13px}
+    }
   </style>
 </head>
 <body>
@@ -43,6 +86,8 @@
     <div class="icon">🎄🎁</div>
     <h1>Świąteczne Losowanie</h1>
     <div class="subtitle">Wylosuj osobę, dla której przygotujesz świąteczny prezent.</div>
+    <div class="faith-banner">✦ Boże Narodzenie · Pokój i dobro ✝</div>
+    <div class="gold-rule"></div>
   </div>
 
   <div id="message"></div>
@@ -300,7 +345,7 @@ async function loadParticipantsForJoin(){
   select.classList.add("hidden");
   document.querySelector('#join label').classList.add("hidden");
   const button=document.querySelector('#join button');
-  button.textContent="🎁 Pokaż mój wynik";
+  button.textContent="🎲 LOSUJ";
   document.getElementById("joinInfo").textContent="Ten link jest przypisany do jednego uczestnika. Nikt inny nie powinien go otrzymać.";
   window.privateToken=token;
 }
@@ -308,18 +353,37 @@ async function loadParticipantsForJoin(){
 async function getResult(){
   const token=window.privateToken;
   if(!token){message("Brak prawidłowego indywidualnego linku.",true);return;}
+  const button=document.querySelector('#join button');
+  const resultBox=document.getElementById("result");
+  button.disabled=true;
+  button.textContent="🎲 LOSOWANIE…";
+  resultBox.innerHTML=`
+    <div class="draw-stage">
+      <div class="draw-gift spinning" aria-hidden="true">🎁</div>
+      <div class="draw-message">Losujemy Twoją osobę…</div>
+    </div>`;
   try{
     const data=await rpc("get_result_by_token",{p_access_token:token});
     const row=Array.isArray(data)?data[0]:data;
     if(!row || !row.assigned_name){
-      document.getElementById("result").innerHTML='<div class="notice">Losowanie nie zostało jeszcze przeprowadzone.</div>';
+      await new Promise(resolve=>setTimeout(resolve,1200));
+      resultBox.innerHTML='<div class="notice">Losowanie nie zostało jeszcze przeprowadzone.</div>';
+      button.disabled=false;
+      button.textContent="🎲 LOSUJ";
       return;
     }
-    document.getElementById("result").innerHTML=
-      `<div class="result">🎁 ${escapeHtml(row.assigned_name)} 🎁</div>
+    // Krótka animacja napięcia, potem pokazujemy wynik pobrany z bazy.
+    await new Promise(resolve=>setTimeout(resolve,5000));
+    resultBox.innerHTML=
+      `<div class="result revealed">🎁 ${escapeHtml(row.assigned_name)} 🎁</div>
        <div style="text-align:center">To dla tej osoby przygotuj prezent.<br><b>🤫 Nie zdradzaj wyniku!</b></div>`;
-    document.querySelector('#join button').disabled=true;
-  }catch(e){message("Nie udało się pobrać wyniku. Sprawdź, czy link jest prawidłowy i czy losowanie zostało rozpoczęte.",true);}
+    button.textContent="🎉 WYLOSOWANO";
+  }catch(e){
+    resultBox.innerHTML="";
+    message("Nie udało się pobrać wyniku. Sprawdź, czy link jest prawidłowy i czy losowanie zostało rozpoczęte.",true);
+    button.disabled=false;
+    button.textContent="🎲 LOSUJ";
+  }
 }
 
 function copyLink(){
