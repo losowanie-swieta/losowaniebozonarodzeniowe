@@ -201,471 +201,58 @@
 <script>
 const SUPABASE_URL = "https://adgzxpkfqfwsonesdjsx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_4B_vt1WsNKZOfcLp2aN0HQ_dspcQWX4";
+let gameId = null, adminCode = null, participants = [], pendingSavedGameId = null;
+window.organizerPasswordForSession = null;
+window.privateToken = null;
 
-let gameId = null;
-let adminCode = null;
-let participants = [];
-
-// Delikatny, losowo rozmieszczony śnieg — bez zewnętrznych bibliotek.
 (function createSnow(){
-  const layer=document.getElementById("snowLayer");
-  if(!layer || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for(let i=0;i<34;i++){
-    const flake=document.createElement("span");
-    flake.className="snowflake";flake.textContent=i%4===0?"✦":"•";
-    flake.style.left=(Math.random()*100)+"%";
-    flake.style.fontSize=(7+Math.random()*10)+"px";
-    flake.style.animationDuration=(10+Math.random()*17)+"s";
-    flake.style.animationDelay=(-Math.random()*24)+"s";
-    flake.style.setProperty("--drift",(Math.random()*100-50)+"px");
-    layer.appendChild(flake);
+  const layer=document.getElementById('snowLayer');
+  if(!layer || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for(let i=0;i<28;i++){
+    const f=document.createElement('span'); f.className='snowflake'; f.textContent=i%4===0?'✦':'•';
+    f.style.left=(Math.random()*100)+'%'; f.style.fontSize=(7+Math.random()*10)+'px';
+    f.style.animationDuration=(10+Math.random()*17)+'s'; f.style.animationDelay=(-Math.random()*24)+'s';
+    f.style.setProperty('--drift',(Math.random()*100-50)+'px'); layer.appendChild(f);
   }
 })();
-
-// Prawdziwe nagranie instrumentalne „We Wish You a Merry Christmas” z Orange Free Sounds.
-// Licencja Creative Commons Attribution 4.0 — autor: Alexander Blu.
-const christmasAudio = document.getElementById("christmasAudio");
-async function tryStartChristmasMusic(){
-  if(!christmasAudio) return;
-  try { christmasAudio.volume = 0.16; await christmasAudio.play(); }
-  catch (e) { /* Przeglądarki mobilne mogą blokować autoplay; ponawiamy po pierwszej interakcji. */ }
+const christmasAudio=document.getElementById('christmasAudio');
+async function tryStartChristmasMusic(){ if(!christmasAudio)return; try{christmasAudio.volume=.16; await christmasAudio.play();}catch(e){} }
+tryStartChristmasMusic(); ['pointerdown','touchstart','keydown'].forEach(evt=>window.addEventListener(evt,tryStartChristmasMusic,{once:true,passive:true}));
+function apiHeaders(){return {apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'};}
+async function rpc(name,body){
+ const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:apiHeaders(),body:JSON.stringify(body)});
+ const t=await r.text(); if(!r.ok) throw new Error(t||`Błąd Supabase (${r.status})`); if(!t)return null; try{return JSON.parse(t)}catch{return t}
 }
-tryStartChristmasMusic();
-["pointerdown","touchstart","keydown"].forEach(evt => {
-  window.addEventListener(evt, () => tryStartChristmasMusic(), { once:true, passive:true });
-});
+function scalar(x){return Array.isArray(x)?x[0]:x}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function message(text,error=false){const el=document.getElementById('message'); if(el)el.innerHTML=`<div class="notice ${error?'error':''}">${escapeHtml(text)}</div>`;}
+function clearMessage(){const el=document.getElementById('message');if(el)el.innerHTML='';}
+function show(id){['admin','adminLogin','join'].forEach(x=>document.getElementById(x)?.classList.add('hidden')); if(id==='join'){document.getElementById('join').classList.remove('hidden');document.getElementById('home').classList.add('hidden');loadParticipantsForJoin();}else{document.getElementById('home').classList.toggle('hidden',id!=='home'); if(id==='admin')document.getElementById('admin').classList.remove('hidden');}clearMessage();}
+function openAdminLogin(){['home','join','admin'].forEach(x=>document.getElementById(x)?.classList.add('hidden'));document.getElementById('adminLogin').classList.remove('hidden');document.getElementById('organizerPassword').focus();clearMessage();}
+function showHome(){['adminLogin','admin','join'].forEach(x=>document.getElementById(x)?.classList.add('hidden'));document.getElementById('home').classList.remove('hidden');clearMessage();}
+async function loginAdmin(){const password=document.getElementById('organizerPassword').value;if(!password){message('Wpisz hasło organizatora.',true);return;}try{const ok=scalar(await rpc('verify_admin_password',{p_password:password}));if(ok!==true){message('Nieprawidłowe hasło.',true);return;}window.organizerPasswordForSession=password;sessionStorage.setItem('organizer_authenticated','1');document.getElementById('organizerPassword').value='';document.getElementById('adminLogin').classList.add('hidden');document.getElementById('admin').classList.remove('hidden');clearMessage();await loadSavedGames();}catch(e){message('Nie udało się zalogować: '+e.message,true);}}
+async function loadSavedGames(){const box=document.getElementById('savedGames');box.innerHTML='Wczytywanie…';const password=window.organizerPasswordForSession;if(!password){box.innerHTML='<div class="small">Zaloguj się ponownie, aby wczytać zapisane losowania.</div>';return;}try{const data=await rpc('list_my_games',{p_admin_password:password});const games=Array.isArray(data)?data:[];if(!games.length){box.innerHTML='<div class="small">Nie ma zapisanych losowań.</div>';return;}box.innerHTML=games.map(g=>`<div class="participant"><span><b>${escapeHtml(g.name)}</b><br><span class="family">${g.created_at?new Date(g.created_at).toLocaleString('pl-PL'):''}</span></span><span style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="secondary smallbtn" data-action="open-saved-game" data-id="${g.id}">📂 Otwórz</button><button type="button" class="secondary smallbtn" data-action="delete-saved-game" data-id="${g.id}" data-name="${escapeHtml(g.name||'losowanie')}">🗑️ Usuń</button></span></div>`).join('');}catch(e){box.innerHTML=`<div class="notice error">Nie udało się wczytać listy: ${escapeHtml(e.message)}</div>`;}}
+function openSavedGame(id){pendingSavedGameId=id;const box=document.getElementById('savedGameCodeBox');box.classList.remove('hidden');document.getElementById('savedGameCodeInput').value='';document.getElementById('savedGameCodeInput').focus();box.scrollIntoView({behavior:'smooth',block:'center'});}
+function cancelOpenSavedGame(){pendingSavedGameId=null;document.getElementById('savedGameCodeBox').classList.add('hidden');}
+async function confirmOpenSavedGame(){const id=pendingSavedGameId,code=document.getElementById('savedGameCodeInput').value.trim();if(!id)return;if(!code){message('Wpisz kod administratora tego losowania.',true);return;}try{const rows=await rpc('get_participants',{p_game_id:id,p_admin_code:code});const name=scalar(await rpc('get_game_name',{p_game_id:id,p_admin_code:code}));gameId=id;adminCode=code;participants=Array.isArray(rows)?rows:[];document.getElementById('adminCode').value=code;document.getElementById('gameName').value=typeof name==='string'?name:(name?.name||'Świąteczne losowanie');document.getElementById('adminPanel').classList.remove('hidden');const u=new URL(location.href);u.search='';u.hash='game='+gameId;document.getElementById('shareLink').textContent=u.toString();document.getElementById('savedGameCodeBox').classList.add('hidden');await refreshParticipants();message('Otwarto zapisane losowanie.');pendingSavedGameId=null;}catch(e){message('Nie udało się otworzyć losowania: '+e.message,true);}}
+async function removeSavedGame(id,name){if(!confirm(`Czy na pewno usunąć losowanie „${name}” wraz z uczestnikami? Tego nie można cofnąć.`))return;const password=window.organizerPasswordForSession;if(!password){message('Zaloguj się ponownie.',true);return;}try{await rpc('delete_game',{p_game_id:id,p_admin_password:password});if(String(gameId)===String(id)){gameId=null;adminCode=null;participants=[];document.getElementById('adminPanel').classList.add('hidden');}message('Usunięto losowanie: '+name);await loadSavedGames();}catch(e){message('Nie udało się usunąć losowania: '+e.message,true);}}
+async function createGame(){clearMessage();const name=document.getElementById('gameName').value.trim(),code=document.getElementById('adminCode').value.trim();if(!name||!code){message('Wpisz nazwę losowania i kod administratora.',true);return;}try{const id=scalar(await rpc('create_game',{p_name:name,p_admin_code:code}));gameId=String(id).replace(/^"|"$/g,'');adminCode=code;participants=[];document.getElementById('adminPanel').classList.remove('hidden');const u=new URL(location.href);u.search='';u.hash='game='+gameId;document.getElementById('shareLink').textContent=u.toString();await refreshParticipants();message('Utworzono losowanie. Dodaj co najmniej dwie osoby.');}catch(e){message('Nie udało się utworzyć losowania: '+e.message,true);}}
+async function addParticipant(){clearMessage();if(!gameId||!adminCode){message('Najpierw utwórz lub otwórz losowanie.',true);return;}const name=document.getElementById('pName').value.trim(),family=document.getElementById('pFamily').value.trim();if(!name){message('Wpisz imię uczestnika.',true);return;}try{await rpc('add_participant',{p_game_id:gameId,p_admin_code:adminCode,p_name:name,p_family:family||null});document.getElementById('pName').value='';document.getElementById('pFamily').value='';await refreshParticipants();message('Dodano uczestnika.');}catch(e){message('Nie udało się dodać uczestnika: '+e.message,true);}}
+async function editParticipant(id){const p=participants.find(x=>String(x.id)===String(id));if(!p){message('Nie znaleziono uczestnika.',true);return;}const name=prompt('Zmień imię / nazwę uczestnika:',p.name);if(name===null)return;if(!name.trim()){message('Imię nie może być puste.',true);return;}const family=prompt('Rodzina / para (puste, jeśli brak):',p.family||'');if(family===null)return;try{await rpc('update_participant',{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id,p_name:name.trim(),p_family:family.trim()||null});await refreshParticipants();message('Zapisano zmiany.');}catch(e){message('Nie udało się edytować uczestnika: '+e.message,true);}}
+async function deleteParticipant(id){const p=participants.find(x=>String(x.id)===String(id));if(!p)return;if(!confirm(`Usunąć uczestnika „${p.name}”?`))return;try{await rpc('delete_participant',{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id});await refreshParticipants();message('Usunięto uczestnika.');}catch(e){message('Nie udało się usunąć uczestnika: '+e.message,true);}}
+async function refreshParticipants(){if(!gameId||!adminCode)return;const data=await rpc('get_participants',{p_game_id:gameId,p_admin_code:adminCode});participants=Array.isArray(data)?data:[];const box=document.getElementById('participants');box.innerHTML=participants.length?participants.map((p,i)=>`<div class="participant"><span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:''}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span>#${i+1}</span><button type="button" class="secondary smallbtn" onclick="editParticipant('${p.id}')">✏️ Edytuj</button><button type="button" class="secondary smallbtn" onclick="deleteParticipant('${p.id}')">🗑️ Usuń</button></span></div>`).join(''):'<div class="small">Nie dodano jeszcze uczestników.</div>';const drawn=participants.length>=2&&participants.every(p=>!!p.assigned_to);const draw=document.getElementById('drawBtn');draw.disabled=participants.length<2||drawn;draw.textContent=drawn?'✅ Losowanie już wykonane':participants.length<2?'🎲 Dodaj co najmniej 2 osoby':'🎲 Wykonaj losowanie';document.getElementById('auditBtn').disabled=!drawn;document.getElementById('previewBtn').disabled=!drawn;if(participants.length)await showPrivateLinks();else document.getElementById('linksPanel').classList.add('hidden');}
+async function showPrivateLinks(){try{const rows=await rpc('get_participant_links',{p_game_id:gameId,p_admin_code:adminCode});const box=document.getElementById('privateLinks');const links=Array.isArray(rows)?rows:[];box.innerHTML=links.map(p=>{const u=new URL(location.href);u.search='';u.hash=`token=${encodeURIComponent(p.access_token)}&imie=${encodeURIComponent(p.name||'')}`;return `<div class="participant" style="display:block"><b>${escapeHtml(p.name)}</b><div class="linkbox">${escapeHtml(u.toString())}</div><button class="secondary" type="button" onclick="copyText(${JSON.stringify(u.toString())})">📋 Kopiuj link</button></div>`}).join('');document.getElementById('linksPanel').classList.toggle('hidden',!links.length);}catch(e){message('Nie udało się pobrać indywidualnych linków: '+e.message,true);}}
+async function copyText(text){try{await navigator.clipboard.writeText(text);message('Link skopiowany.');}catch(e){prompt('Skopiuj link:',text);}}
+async function drawGame(){if(!gameId||!adminCode){message('Najpierw otwórz losowanie.',true);return;}if(participants.length<2){message('Dodaj co najmniej dwie osoby.',true);return;}if(participants.every(p=>!!p.assigned_to)){message('To losowanie zostało już wykonane. Wyniki pozostają bez zmian.');await showPrivateLinks();return;}if(!confirm('Wykonać losowanie? Wyników nie będzie można zmienić.'))return;const btn=document.getElementById('drawBtn');btn.disabled=true;try{await rpc('draw_game',{p_game_id:gameId,p_admin_code:adminCode});await refreshParticipants();message('Losowanie zakończone. Linki uczestników są gotowe.');}catch(e){message('Nie udało się wykonać losowania: '+e.message,true);btn.disabled=false;}}
+async function verifyDrawResults(){const box=document.getElementById('auditResult');box.classList.remove('hidden');try{const rows=await rpc('get_participants',{p_game_id:gameId,p_admin_code:adminCode});const list=Array.isArray(rows)?rows:[];const ids=new Set(list.map(p=>String(p.id)));const errors=[];for(const p of list){if(!p.assigned_to)errors.push(`${p.name}: brak przydziału`);else if(String(p.id)===String(p.assigned_to))errors.push(`${p.name}: wylosował(a) siebie`);else if(!ids.has(String(p.assigned_to)))errors.push(`${p.name}: przydział poza listą`);}const targets=list.map(p=>String(p.assigned_to||''));if(targets.some(x=>!x))errors.push('Brakuje przydziałów.');if(new Set(targets).size!==targets.length)errors.push('Co najmniej jedna osoba została wylosowana więcej niż raz.');box.innerHTML=errors.length?'<b>⚠️ Wykryto problem:</b><br>'+errors.map(escapeHtml).join('<br>'):'<b>✅ Losowanie wygląda poprawnie.</b><br>Nikt nie wylosował siebie, a każda osoba ma unikalny przydział.';}catch(e){box.textContent='Błąd sprawdzania: '+e.message;}}
+function toggleDrawPreview(){const box=document.getElementById('drawPreview');if(!box.classList.contains('hidden')){box.classList.add('hidden');return;}box.classList.remove('hidden');box.innerHTML='<b>Podgląd wyników</b><br>'+participants.map(p=>`${escapeHtml(p.name)} → ${escapeHtml(participants.find(x=>String(x.id)===String(p.assigned_to))?.name||'brak')}`).join('<br>');}
+async function loadParticipantsForJoin(){const params=new URLSearchParams(location.hash.replace(/^#/,'').replace(/&/g,'&'));const token=params.get('token');const select=document.getElementById('participantSelect');if(!token){select.innerHTML='<option value="">Brak indywidualnego linku</option>';document.getElementById('joinInfo').textContent='Otwórz indywidualny link otrzymany od organizatora.';return;}select.classList.add('hidden');document.querySelector('#join label').classList.add('hidden');const btn=document.querySelector('#join button');btn.textContent='🎲 LOSUJ';document.getElementById('joinInfo').textContent='Ten link jest przypisany do jednego uczestnika. Nie przekazuj go innym osobom.';window.privateToken=token;}
+async function getResult(){const token=window.privateToken;if(!token){message('Brak indywidualnego linku.',true);return;}const btn=document.querySelector('#join button'),result=document.getElementById('result');btn.disabled=true;btn.textContent='🎲 LOSOWANIE…';result.innerHTML='<div class="draw-stage"><div class="draw-gift spinning">🎁</div><div class="draw-message">Losujemy Twoją osobę…</div></div>';try{const row=scalar(await rpc('get_result_by_token',{p_access_token:token}));if(!row||!row.assigned_name){result.innerHTML='<div class="notice">Losowanie nie zostało jeszcze przeprowadzone.</div>';btn.disabled=false;btn.textContent='🎲 LOSUJ';return;}await new Promise(r=>setTimeout(r,5000));const who=new URLSearchParams(location.hash.replace(/^#/,'')).get('imie')||row.participant_name||'';result.innerHTML=`<div class="result revealed">🎁 ${escapeHtml(row.assigned_name)} 🎁</div><div style="text-align:center;font-size:18px;line-height:1.7">Cześć ${escapeHtml(who)},<br>w tym roku jesteś Mikołajem dla:<br><b style="font-size:24px;color:var(--accent)">${escapeHtml(row.assigned_name)}</b><br>Przygotuj tej osobie świąteczny prezent!<br><b>🤫 Nie zdradzaj wyniku!</b></div>`;btn.textContent='🎉 WYLOSOWANO';}catch(e){result.innerHTML='';message('Nie udało się pobrać wyniku: '+e.message,true);btn.disabled=false;btn.textContent='🎲 LOSUJ';}}
+function copyLink(){copyText(document.getElementById('shareLink').textContent)}
+// Rejestrujemy kliknięcia w jednym miejscu, aby dynamiczne elementy zawsze reagowały.
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-action]');if(!b)return;const id=b.dataset.id;if(b.dataset.action==='edit-participant')editParticipant(id);if(b.dataset.action==='delete-participant')deleteParticipant(id);if(b.dataset.action==='open-saved-game')openSavedGame(id);if(b.dataset.action==='delete-saved-game')removeSavedGame(id,b.dataset.name||'losowanie');});
+if(location.hash.startsWith('#token=')){show('join');loadParticipantsForJoin();}
 
-function apiHeaders(){
-  return {
-    "apikey": SUPABASE_KEY,
-    "Authorization": "Bearer " + SUPABASE_KEY,
-    "Content-Type": "application/json"
-  };
-}
-
-async function rpc(name, body){
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-    method:"POST", headers:apiHeaders(), body:JSON.stringify(body)
-  });
-  const text = await r.text();
-  if(!r.ok) throw new Error(text || "Błąd serwera");
-  try { return JSON.parse(text); } catch { return text; }
-}
-
-function scalar(data){
-  if(Array.isArray(data)) return data[0];
-  return data;
-}
-
-function show(id){
-  document.getElementById("admin").classList.add("hidden");
-  document.getElementById("adminLogin").classList.add("hidden");
-  document.getElementById("join").classList.toggle("hidden", id!=="join");
-  document.getElementById("home").classList.toggle("hidden", id==="join");
-  clearMessage();
-  if(id==="join") loadParticipantsForJoin();
-}
-
-function message(text, error=false){
-  const el=document.getElementById("message");
-  el.innerHTML=`<div class="notice ${error?'error':''}">${text}</div>`;
-}
-function clearMessage(){document.getElementById("message").innerHTML="";}
-
-
-function openAdminLogin(){
-  document.getElementById("home").classList.add("hidden");
-  document.getElementById("join").classList.add("hidden");
-  document.getElementById("admin").classList.add("hidden");
-  document.getElementById("adminLogin").classList.remove("hidden");
-  document.getElementById("organizerPassword").focus();
-  clearMessage();
-}
-
-function showHome(){
-  document.getElementById("adminLogin").classList.add("hidden");
-  document.getElementById("admin").classList.add("hidden");
-  document.getElementById("join").classList.add("hidden");
-  document.getElementById("home").classList.remove("hidden");
-  clearMessage();
-}
-
-async function loginAdmin(){
-  const password=document.getElementById("organizerPassword").value;
-  if(!password){message("Wpisz hasło organizatora.",true);return;}
-  try{
-    const data=await rpc("verify_admin_password",{p_password:password});
-    const ok=Array.isArray(data)?data[0]:data;
-    if(ok===true){
-      sessionStorage.setItem("organizer_authenticated","1");
-      window.organizerPasswordForSession=password;
-      document.getElementById("organizerPassword").value="";
-      document.getElementById("adminLogin").classList.add("hidden");
-      document.getElementById("admin").classList.remove("hidden");
-      clearMessage();
-      await loadSavedGames();
-    }else{
-      message("Nieprawidłowe hasło.",true);
-    }
-  }catch(e){
-    message("Nie udało się sprawdzić hasła: "+e.message,true);
-  }
-}
-
-async function loadSavedGames(){
-  const box=document.getElementById("savedGames");
-  box.innerHTML="Wczytywanie…";
-  try{
-    const password=window.organizerPasswordForSession;
-    if(!password){box.innerHTML='<div class="small">Zaloguj się ponownie, aby wczytać zapisane losowania.</div>';return;}
-    const data=await rpc("list_my_games",{p_admin_password:password});
-    const games=Array.isArray(data)?data:[];
-    if(!games.length){box.innerHTML='<div class="small">Nie ma jeszcze zapisanych losowań.</div>';return;}
-    box.innerHTML=games.map(g=>`
-      <div class="participant">
-        <span><b>${escapeHtml(g.name)}</b><br><span class="family">${new Date(g.created_at).toLocaleString("pl-PL")}</span></span>
-        <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
-          <button type="button" class="secondary smallbtn" onclick="removeSavedGame('${g.id}', decodeURIComponent('${encodeURIComponent(g.name)}'))">🗑️ Usuń</button>
-        </span>
-      </div>`).join("");
-  }catch(e){box.innerHTML='<div class="notice error">Nie udało się wczytać listy: '+escapeHtml(e.message)+'</div>';}
-}
-
-let pendingSavedGameId=null;
-function openSavedGame(id){
-  pendingSavedGameId=id;
-  const box=document.getElementById("savedGameCodeBox");
-  box.classList.remove("hidden");
-  document.getElementById("savedGameCodeInput").value="";
-  document.getElementById("savedGameCodeInput").focus();
-  box.scrollIntoView({behavior:"smooth",block:"center"});
-}
-function cancelOpenSavedGame(){
-  pendingSavedGameId=null;
-  document.getElementById("savedGameCodeBox").classList.add("hidden");
-}
-async function confirmOpenSavedGame(){
-  const id=pendingSavedGameId;
-  const code=document.getElementById("savedGameCodeInput").value.trim();
-  if(!id)return;
-  if(!code){message("Wpisz kod administratora tego losowania.",true);return;}
-  document.getElementById("savedGameCodeBox").classList.add("hidden");
-  try{
-    const data=await rpc("get_participants",{p_game_id:id,p_admin_code:code});
-    gameId=id;adminCode=code;participants=data||[];
-    document.getElementById("adminCode").value=code;
-    const name=(await rpc("get_game_name",{p_game_id:id,p_admin_code:code}));
-    document.getElementById("gameName").value=Array.isArray(name)?name[0]:name;
-    document.getElementById("adminPanel").classList.remove("hidden");
-    const url=new URL(location.href);url.search="";url.hash="game="+gameId;
-    document.getElementById("shareLink").textContent=url.toString();
-    await refreshParticipants();
-    if (participants.length >= 2) await showPrivateLinks();
-    message("Otwarto zapisane losowanie. Zapisane indywidualne linki są dostępne poniżej.");
-    pendingSavedGameId=null;
-  }catch(e){message("Nie udało się otworzyć losowania. Sprawdź kod administratora. "+e.message,true);}
-}
-
-async function removeSavedGame(id,name){
-  if(!confirm(`Czy na pewno usunąć całe losowanie „${name}” wraz z uczestnikami? Tej operacji nie można cofnąć.`))return;
-  const password=window.organizerPasswordForSession;
-  if(!password){message("Zaloguj się ponownie.",true);return;}
-  try{
-    await rpc("delete_game",{p_game_id:id,p_admin_password:password});
-    message("Usunięto losowanie: "+escapeHtml(name));
-    if(gameId===id){gameId=null;adminCode=null;participants=[];document.getElementById("adminPanel").classList.add("hidden");}
-    await loadSavedGames();
-  }catch(e){message("Nie udało się usunąć losowania: "+e.message,true);}
-}
-
-async function createGame(){
-  clearMessage();
-  const name=document.getElementById("gameName").value.trim();
-  const code=document.getElementById("adminCode").value.trim();
-  if(!name || !code){message("Wpisz nazwę losowania i kod administratora.",true);return;}
-  try{
-    const data=await rpc("create_game",{p_name:name,p_admin_code:code});
-    gameId=scalar(data);
-    adminCode=code;
-    document.getElementById("adminPanel").classList.remove("hidden");
-    const url=new URL(location.href);
-    url.search="";
-    url.hash="game="+gameId;
-    document.getElementById("shareLink").textContent=url.toString();
-    await refreshParticipants();
-  }catch(e){message("Nie udało się utworzyć losowania: "+e.message,true);}
-}
-
-async function addParticipant(){
-  clearMessage();
-  const name=document.getElementById("pName").value.trim();
-  const family=document.getElementById("pFamily").value.trim();
-  if(!name){message("Wpisz imię uczestnika.",true);return;}
-  try{
-    await rpc("add_participant",{p_game_id:gameId,p_admin_code:adminCode,p_name:name,p_family:family||null});
-    document.getElementById("pName").value="";
-    document.getElementById("pFamily").value="";
-    await refreshParticipants();
-  }catch(e){message("Nie udało się dodać uczestnika: "+e.message,true);}
-}
-
-async function editParticipant(id){
-  const p=participants.find(x=>String(x.id)===String(id));
-  if(!p){message("Nie znaleziono uczestnika.",true);return;}
-  const name=prompt("Zmień imię / nazwę uczestnika:",p.name);
-  if(name===null)return;
-  const cleanName=name.trim();
-  if(!cleanName){message("Imię nie może być puste.",true);return;}
-  const family=prompt("Zmień rodzinę / parę (zostaw puste, jeśli brak):",p.family||"");
-  if(family===null)return;
-  try{
-    await rpc("update_participant",{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id,p_name:cleanName,p_family:family.trim()||null});
-    await refreshParticipants();
-    message("Dane uczestnika zostały zmienione.");
-  }catch(e){message("Nie udało się zmienić uczestnika: "+e.message,true);}
-}
-
-async function deleteParticipant(id){
-  const p=participants.find(x=>String(x.id)===String(id));
-  if(!p)return;
-  if(!confirm(`Czy na pewno usunąć uczestnika „${p.name}”?`))return;
-  try{
-    await rpc("delete_participant",{p_game_id:gameId,p_admin_code:adminCode,p_participant_id:id});
-    await refreshParticipants();
-    message("Uczestnik został usunięty.");
-  }catch(e){message("Nie udało się usunąć uczestnika: "+e.message,true);}
-}
-
-async function refreshParticipants(){
-  const data=await rpc("get_participants",{p_game_id:gameId,p_admin_code:adminCode});
-  participants=data||[];
-  const box=document.getElementById("participants");
-  if(!participants.length){
-    box.innerHTML='<div class="small">Nie dodano jeszcze uczestników.</div>';
-  } else {
-    box.innerHTML=participants.map((p,i)=>
-      `<div class="participant">
-        <span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:""}</span>
-        <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          <span>#${i+1}</span>
-          <button type="button" class="secondary smallbtn" onclick="editParticipant('${p.id}')">✏️ Edytuj</button>
-          <button type="button" class="secondary smallbtn" onclick="deleteParticipant('${p.id}')">🗑️ Usuń</button>
-        </span>
-      </div>`
-    ).join("");
-  }
-  // Jeśli wyniki są już zapisane, nie pozwalaj uruchomić losowania ponownie.
-  const alreadyDrawn = participants.length >= 2 && participants.every(p => p.assigned_to !== null && p.assigned_to !== undefined && String(p.assigned_to).length > 0);
-  const drawBtn = document.getElementById("drawBtn");
-  if (drawBtn) {
-    drawBtn.disabled = participants.length < 2 || alreadyDrawn;
-    drawBtn.textContent = alreadyDrawn ? "✅ Losowanie już wykonane" : (participants.length < 2 ? "🎲 Dodaj co najmniej 2 osoby" : "🎲 Wykonaj losowanie");
-  }
-  const auditBtn = document.getElementById("auditBtn");
-  if (auditBtn) auditBtn.disabled = !alreadyDrawn;
-  const previewBtn = document.getElementById("previewBtn");
-  if (previewBtn) previewBtn.disabled = !alreadyDrawn;
-  const auditResult = document.getElementById("auditResult");
-  if (auditResult) { auditResult.classList.add("hidden"); auditResult.innerHTML = ""; }
-  const drawPreview = document.getElementById("drawPreview");
-  if (drawPreview) { drawPreview.classList.add("hidden"); drawPreview.innerHTML = ""; }
-  if (previewBtn) previewBtn.textContent = "👁️ Podgląd wyników";
-  // Pokaż zapisane linki również przy ponownym otwarciu gry.
-  // Tokeny uczestników są stałe w bazie; ponowne pobranie nie tworzy nowych linków.
-  if (participants.length >= 2) {
-    await showPrivateLinks();
-  } else {
-    document.getElementById("linksPanel").classList.add("hidden");
-  }
-}
-
-async function verifyDrawResults(){
-  const box = document.getElementById("auditResult");
-  if (!box) return;
-  box.classList.remove("hidden");
-  box.innerHTML = "Sprawdzam zapisane wyniki…";
-  try {
-    // Odśwież dane z Supabase przed kontrolą, aby sprawdzać stan zapisany w bazie.
-    const data = await rpc("get_participants", {p_game_id: gameId, p_admin_code: adminCode});
-    const rows = data || [];
-    const byId = new Map(rows.map(p => [String(p.id), p]));
-    const selfAssignments = rows.filter(p => p.assigned_to && String(p.assigned_to) === String(p.id));
-    const missingAssignments = rows.filter(p => !p.assigned_to);
-    const unknownTargets = rows.filter(p => p.assigned_to && !byId.has(String(p.assigned_to)));
-    const targetCounts = new Map();
-    rows.forEach(p => { if (p.assigned_to) { const k=String(p.assigned_to); targetCounts.set(k,(targetCounts.get(k)||0)+1); } });
-    const duplicateTargets = [...targetCounts.entries()].filter(([id,count]) => count > 1).map(([id]) => byId.get(id)?.name || "nieznana osoba");
-    const problems = [];
-    if (rows.length < 2) problems.push("Za mało uczestników, aby potwierdzić poprawność losowania.");
-    if (selfAssignments.length) problems.push("Osoby, które wylosowały same siebie: " + selfAssignments.map(p=>escapeHtml(p.name)).join(", ") + ".");
-    if (missingAssignments.length) problems.push("Brak przypisania dla: " + missingAssignments.map(p=>escapeHtml(p.name)).join(", ") + ".");
-    if (unknownTargets.length) problems.push("Niektóre przypisania wskazują na osoby spoza tej listy.");
-    if (duplicateTargets.length) problems.push("Osoby wylosowane więcej niż raz: " + duplicateTargets.map(escapeHtml).join(", ") + ".");
-    if (!problems.length && rows.length >= 2) {
-      box.innerHTML = '<b>✅ Kontrola zakończona pomyślnie.</b><br>Nikt nie wylosował samego siebie, każdy ma przypisaną osobę, a każda osoba została wylosowana dokładnie raz.';
-      box.style.borderColor = "#2e7d32";
-    } else {
-      box.innerHTML = '<b>⚠️ Wykryto problem — nie uruchamiaj losowania ponownie.</b><br>' + problems.join("<br>");
-      box.style.borderColor = "#b3261e";
-    }
-  } catch (e) {
-    box.innerHTML = '<b>Nie udało się sprawdzić wyników.</b><br>' + escapeHtml(e.message || "Błąd pobierania danych.");
-    box.style.borderColor = "#b3261e";
-  }
-}
-
-async function toggleDrawPreview(){
-  const box=document.getElementById("drawPreview");
-  const btn=document.getElementById("previewBtn");
-  if(!box||!btn)return;
-  if(!box.classList.contains("hidden")){
-    box.classList.add("hidden");
-    btn.textContent="👁️ Podgląd wyników";
-    return;
-  }
-  box.classList.remove("hidden");
-  box.innerHTML="Wczytuję zapisane wyniki…";
-  try{
-    const rows=await rpc("get_participants",{p_game_id:gameId,p_admin_code:adminCode})||[];
-    const byId=new Map(rows.map(p=>[String(p.id),p]));
-    const alreadyDrawn=rows.length>=2&&rows.every(p=>!!p.assigned_to);
-    if(!alreadyDrawn){
-      box.innerHTML="Losowanie nie jest jeszcze kompletne — nie ma pełnego podglądu.";
-      return;
-    }
-    box.innerHTML='<b>👁️ Podgląd wyników — tylko dla organizatora</b><p class="small">Ta lista pokazuje wszystkie przypisania. Nie wysyłaj jej uczestnikom.</p><div>'+rows.map(p=>{
-      const target=byId.get(String(p.assigned_to));
-      return '<div class="participant"><b>'+escapeHtml(p.name)+'</b><span style="margin:0 8px">→</span><span>'+escapeHtml(target?target.name:'Nieznana osoba')+'</span></div>';
-    }).join('')+'</div>';
-    btn.textContent="🙈 Ukryj podgląd wyników";
-  }catch(e){
-    box.innerHTML='<b>Nie udało się wczytać podglądu.</b><br>'+escapeHtml(e.message||"Błąd pobierania danych.");
-  }
-}
-
-async function showPrivateLinks(){
-  try{
-    const data=await rpc("get_participant_links",{p_game_id:gameId,p_admin_code:adminCode});
-    const box=document.getElementById("privateLinks");
-    const base=new URL(location.href);
-    base.search="";
-    if(!data || !data.length){
-      box.innerHTML='<div class="small">Brak linków.</div>';
-      return;
-    }
-    box.innerHTML=data.map(p=>{
-      const url=new URL(base.toString());
-      url.hash="token="+encodeURIComponent(p.access_token)+"&imie="+encodeURIComponent(p.name);
-      return `<div class="participant" style="display:block">
-        <b>${escapeHtml(p.name)}</b>
-        <div class="linkbox">${escapeHtml(url.toString())}</div>
-        <button class="secondary" onclick="copyText('${url.toString().replace(/'/g,"\\'")}')">📋 Kopiuj</button>
-      </div>`;
-    }).join("");
-    document.getElementById("linksPanel").classList.remove("hidden");
-  }catch(e){
-    message("Nie udało się przygotować indywidualnych linków: "+e.message,true);
-  }
-}
-
-function copyText(text){
-  navigator.clipboard?.writeText(text).then(()=>message("📋 Link został skopiowany."));
-}
-
-async function drawGame(){
-  // Dodatkowa kontrola po stronie strony — nie wywołuj RPC ponownie po wykonanym losowaniu.
-  if (participants.length >= 2 && participants.every(p => !!p.assigned_to)) {
-    message("To losowanie zostało już wykonane. Wyniki i indywidualne linki pozostają bez zmian.");
-    await showPrivateLinks();
-    return;
-  }
-  if(!confirm("Czy na pewno rozpocząć losowanie? Po rozpoczęciu wyniki zostaną ustalone i nie należy go powtarzać.")) return;
-  try{
-    await rpc("draw_game",{p_game_id:gameId,p_admin_code:adminCode});
-    await refreshParticipants();
-    message("🎉 Losowanie zakończone! Linki uczestników zostały zapisane.");
-    await showPrivateLinks();
-  }catch(e){message("Nie udało się wykonać losowania: "+e.message,true);}
-}
-
-async function loadParticipantsForJoin(){
-  const params=new URLSearchParams(location.hash.replace(/^#/,""));
-  const token=params.get("token");
-  const select=document.getElementById("participantSelect");
-  if(!token){
-    select.innerHTML='<option value="">Brak indywidualnego linku</option>';
-    document.getElementById("joinInfo").textContent="Poproś organizatora o swój indywidualny link.";
-    return;
-  }
-  select.classList.add("hidden");
-  document.querySelector('#join label').classList.add("hidden");
-  const button=document.querySelector('#join button');
-  button.textContent="🎲 LOSUJ";
-  document.getElementById("joinInfo").textContent="Ten link jest przypisany do jednego uczestnika. Nikt inny nie powinien go otrzymać.";
-  window.privateToken=token;
-}
-
-async function getResult(){
-  const token=window.privateToken;
-  if(!token){message("Brak prawidłowego indywidualnego linku.",true);return;}
-  const button=document.querySelector('#join button');
-  const resultBox=document.getElementById("result");
-  button.disabled=true;
-  button.textContent="🎲 LOSOWANIE…";
-  resultBox.innerHTML=`
-    <div class="draw-stage">
-      <div class="draw-gift spinning" aria-hidden="true">🎁</div>
-      <div class="draw-message">Losujemy Twoją osobę…</div>
-    </div>`;
-  try{
-    const data=await rpc("get_result_by_token",{p_access_token:token});
-    const row=Array.isArray(data)?data[0]:data;
-    if(!row || !row.assigned_name){
-      await new Promise(resolve=>setTimeout(resolve,1200));
-      resultBox.innerHTML='<div class="notice">Losowanie nie zostało jeszcze przeprowadzone.</div>';
-      button.disabled=false;
-      button.textContent="🎲 LOSUJ";
-      return;
-    }
-    // Krótka animacja napięcia, potem pokazujemy wynik pobrany z bazy.
-    await new Promise(resolve=>setTimeout(resolve,5000));
-    resultBox.innerHTML=
-      `<div class="result revealed">🎁 ${escapeHtml(row.assigned_name)} 🎁</div>
-       <div style="text-align:center;font-size:18px;line-height:1.7">
-         Cześć ${escapeHtml(row.participant_name||"")},<br>
-         w tym roku jesteś Mikołajem dla:<br>
-         <b style="font-size:24px;color:var(--accent)">${escapeHtml(row.assigned_name)}</b>
-         <br>Przygotuj tej osobie świąteczny prezent!<br><b>🤫 Nie zdradzaj wyniku!</b>
-       </div>`;
-    button.textContent="🎉 WYLOSOWANO";
-  }catch(e){
-    resultBox.innerHTML="";
-    message("Nie udało się pobrać wyniku. Sprawdź, czy link jest prawidłowy i czy losowanie zostało rozpoczęte.",true);
-    button.disabled=false;
-    button.textContent="🎲 LOSUJ";
-  }
-}
-
-function copyLink(){
-  const text=document.getElementById("shareLink").textContent;
-  navigator.clipboard?.writeText(text).then(()=>message("📋 Link został skopiowany."));
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-}
-
-// Jawne udostępnienie funkcji dla pozostałych przycisków HTML.
-window.editParticipant = editParticipant;
-window.deleteParticipant = deleteParticipant;
-window.openSavedGame = openSavedGame;
-window.removeSavedGame = removeSavedGame;
-
-if(location.hash.startsWith("#token=")){
-  show("join");
-  loadParticipantsForJoin();
-}
 </script>
 </body>
 </html>
