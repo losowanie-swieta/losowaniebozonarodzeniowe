@@ -171,6 +171,10 @@
       </div>
 
       <button id="drawBtn" class="primary" onclick="drawGame()" disabled>🎲 ROZPOCZNIJ LOSOWANIE</button>
+      <button id="auditBtn" class="secondary" onclick="verifyDrawResults()" style="margin-top:8px" disabled>🔎 Sprawdź poprawność losowania</button>
+      <button id="previewBtn" class="secondary" onclick="toggleDrawPreview()" style="margin-top:8px" disabled>👁️ Podgląd wyników</button>
+      <div id="auditResult" class="notice hidden" style="margin-top:10px" role="status" aria-live="polite"></div>
+      <div id="drawPreview" class="notice hidden" style="margin-top:10px" aria-live="polite"></div>
       <div class="small" style="margin-top:8px">
         Osoby oznaczone tą samą nazwą rodziny/pary nie będą mogły wylosować siebie nawzajem.
         Wynik uczestnika jest dostępny wyłącznie przez jego indywidualny link.
@@ -456,12 +460,85 @@ async function refreshParticipants(){
   const drawBtn = document.getElementById("drawBtn");
   drawBtn.disabled = participants.length < 2 || alreadyDrawn;
   drawBtn.textContent = alreadyDrawn ? "✅ Losowanie już wykonane" : "🎲 Wykonaj losowanie";
+  const auditBtn = document.getElementById("auditBtn");
+  if (auditBtn) auditBtn.disabled = !alreadyDrawn;
+  const previewBtn = document.getElementById("previewBtn");
+  if (previewBtn) previewBtn.disabled = !alreadyDrawn;
+  const auditResult = document.getElementById("auditResult");
+  if (auditResult) { auditResult.classList.add("hidden"); auditResult.innerHTML = ""; }
+  const drawPreview = document.getElementById("drawPreview");
+  if (drawPreview) { drawPreview.classList.add("hidden"); drawPreview.innerHTML = ""; }
+  if (previewBtn) previewBtn.textContent = "👁️ Podgląd wyników";
   // Pokaż zapisane linki również przy ponownym otwarciu gry.
   // Tokeny uczestników są stałe w bazie; ponowne pobranie nie tworzy nowych linków.
   if (participants.length >= 2) {
     await showPrivateLinks();
   } else {
     document.getElementById("linksPanel").classList.add("hidden");
+  }
+}
+
+async function verifyDrawResults(){
+  const box = document.getElementById("auditResult");
+  if (!box) return;
+  box.classList.remove("hidden");
+  box.innerHTML = "Sprawdzam zapisane wyniki…";
+  try {
+    // Odśwież dane z Supabase przed kontrolą, aby sprawdzać stan zapisany w bazie.
+    const data = await rpc("get_participants", {p_game_id: gameId, p_admin_code: adminCode});
+    const rows = data || [];
+    const byId = new Map(rows.map(p => [String(p.id), p]));
+    const selfAssignments = rows.filter(p => p.assigned_to && String(p.assigned_to) === String(p.id));
+    const missingAssignments = rows.filter(p => !p.assigned_to);
+    const unknownTargets = rows.filter(p => p.assigned_to && !byId.has(String(p.assigned_to)));
+    const targetCounts = new Map();
+    rows.forEach(p => { if (p.assigned_to) { const k=String(p.assigned_to); targetCounts.set(k,(targetCounts.get(k)||0)+1); } });
+    const duplicateTargets = [...targetCounts.entries()].filter(([id,count]) => count > 1).map(([id]) => byId.get(id)?.name || "nieznana osoba");
+    const problems = [];
+    if (rows.length < 2) problems.push("Za mało uczestników, aby potwierdzić poprawność losowania.");
+    if (selfAssignments.length) problems.push("Osoby, które wylosowały same siebie: " + selfAssignments.map(p=>escapeHtml(p.name)).join(", ") + ".");
+    if (missingAssignments.length) problems.push("Brak przypisania dla: " + missingAssignments.map(p=>escapeHtml(p.name)).join(", ") + ".");
+    if (unknownTargets.length) problems.push("Niektóre przypisania wskazują na osoby spoza tej listy.");
+    if (duplicateTargets.length) problems.push("Osoby wylosowane więcej niż raz: " + duplicateTargets.map(escapeHtml).join(", ") + ".");
+    if (!problems.length && rows.length >= 2) {
+      box.innerHTML = '<b>✅ Kontrola zakończona pomyślnie.</b><br>Nikt nie wylosował samego siebie, każdy ma przypisaną osobę, a każda osoba została wylosowana dokładnie raz.';
+      box.style.borderColor = "#2e7d32";
+    } else {
+      box.innerHTML = '<b>⚠️ Wykryto problem — nie uruchamiaj losowania ponownie.</b><br>' + problems.join("<br>");
+      box.style.borderColor = "#b3261e";
+    }
+  } catch (e) {
+    box.innerHTML = '<b>Nie udało się sprawdzić wyników.</b><br>' + escapeHtml(e.message || "Błąd pobierania danych.");
+    box.style.borderColor = "#b3261e";
+  }
+}
+
+async function toggleDrawPreview(){
+  const box=document.getElementById("drawPreview");
+  const btn=document.getElementById("previewBtn");
+  if(!box||!btn)return;
+  if(!box.classList.contains("hidden")){
+    box.classList.add("hidden");
+    btn.textContent="👁️ Podgląd wyników";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML="Wczytuję zapisane wyniki…";
+  try{
+    const rows=await rpc("get_participants",{p_game_id:gameId,p_admin_code:adminCode})||[];
+    const byId=new Map(rows.map(p=>[String(p.id),p]));
+    const alreadyDrawn=rows.length>=2&&rows.every(p=>!!p.assigned_to);
+    if(!alreadyDrawn){
+      box.innerHTML="Losowanie nie jest jeszcze kompletne — nie ma pełnego podglądu.";
+      return;
+    }
+    box.innerHTML='<b>👁️ Podgląd wyników — tylko dla organizatora</b><p class="small">Ta lista pokazuje wszystkie przypisania. Nie wysyłaj jej uczestnikom.</p><div>'+rows.map(p=>{
+      const target=byId.get(String(p.assigned_to));
+      return '<div class="participant"><b>'+escapeHtml(p.name)+'</b><span style="margin:0 8px">→</span><span>'+escapeHtml(target?target.name:'Nieznana osoba')+'</span></div>';
+    }).join('')+'</div>';
+    btn.textContent="🙈 Ukryj podgląd wyników";
+  }catch(e){
+    box.innerHTML='<b>Nie udało się wczytać podglądu.</b><br>'+escapeHtml(e.message||"Błąd pobierania danych.");
   }
 }
 
