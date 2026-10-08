@@ -325,8 +325,8 @@ async function loadSavedGames(){
       <div class="participant">
         <span><b>${escapeHtml(g.name)}</b><br><span class="family">${new Date(g.created_at).toLocaleString("pl-PL")}</span></span>
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" class="secondary smallbtn" data-action="open-saved-game" data-id="${g.id}">📂 Otwórz</button>
-          <button type="button" class="secondary smallbtn" data-action="delete-saved-game" data-id="${g.id}" data-name="${escapeHtml(g.name)}">🗑️ Usuń</button>
+          <button type="button" class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
+          <button type="button" class="secondary smallbtn" onclick="removeSavedGame('${g.id}', decodeURIComponent('${encodeURIComponent(g.name)}'))">🗑️ Usuń</button>
         </span>
       </div>`).join("");
   }catch(e){box.innerHTML='<div class="notice error">Nie udało się wczytać listy: '+escapeHtml(e.message)+'</div>';}
@@ -449,8 +449,8 @@ async function refreshParticipants(){
         <span><b>${escapeHtml(p.name)}</b>${p.family?`<br><span class="family">👨‍👩‍👧 ${escapeHtml(p.family)}</span>`:""}</span>
         <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <span>#${i+1}</span>
-          <button type="button" class="secondary smallbtn" data-action="edit-participant" data-id="${p.id}">✏️ Edytuj</button>
-          <button type="button" class="secondary smallbtn" data-action="delete-participant" data-id="${p.id}">🗑️ Usuń</button>
+          <button type="button" class="secondary smallbtn" onclick="editParticipant('${p.id}')">✏️ Edytuj</button>
+          <button type="button" class="secondary smallbtn" onclick="deleteParticipant('${p.id}')">🗑️ Usuń</button>
         </span>
       </div>`
     ).join("");
@@ -654,22 +654,6 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
 
-// Obsługa przycisków przez delegację — działa również po dynamicznym odświeżeniu list.
-document.addEventListener("click", function(event){
-  const button = event.target.closest("button[data-action]");
-  if(!button) return;
-  event.preventDefault();
-  const id = button.dataset.id;
-  const action = button.dataset.action;
-  try {
-    if(action === "edit-participant") editParticipant(id);
-    else if(action === "delete-participant") deleteParticipant(id);
-    else if(action === "open-saved-game") openSavedGame(id);
-    else if(action === "delete-saved-game") removeSavedGame(id, button.dataset.name || "to losowanie");
-  } catch(error) {
-    message("Nie udało się wykonać operacji: " + (error?.message || error), true);
-  }
-});
 // Jawne udostępnienie funkcji dla pozostałych przycisków HTML.
 window.editParticipant = editParticipant;
 window.deleteParticipant = deleteParticipant;
