@@ -326,7 +326,7 @@ async function loadSavedGames(){
         <span><b>${escapeHtml(g.name)}</b><br><span class="family">${new Date(g.created_at).toLocaleString("pl-PL")}</span></span>
         <span style="display:flex;gap:6px;flex-wrap:wrap">
           <button type="button" class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
-          <button type="button" class="secondary smallbtn" onclick="removeSavedGame('${g.id}', decodeURIComponent('${encodeURIComponent(g.name)}'))">🗑️ Usuń</button>
+          <button type="button" class="secondary smallbtn" data-action="delete-game" data-id="${escapeHtml(g.id)}" data-name="${escapeHtml(g.name)}">🗑️ Usuń</button>
         </span>
       </div>`).join("");
   }catch(e){box.innerHTML='<div class="notice error">Nie udało się wczytać listy: '+escapeHtml(e.message)+'</div>';}
@@ -653,6 +653,24 @@ function copyLink(){
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
+
+// Jawna obsługa kliknięć dla przycisków generowanych dynamicznie.
+document.addEventListener("click", function(event){
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = button.dataset.id;
+  const action = button.dataset.action;
+  if (action === "edit-participant") {
+    event.preventDefault();
+    editParticipant(id);
+  } else if (action === "delete-participant") {
+    event.preventDefault();
+    deleteParticipant(id);
+  } else if (action === "delete-game") {
+    event.preventDefault();
+    removeSavedGame(id, button.dataset.name || "to losowanie");
+  }
+});
 
 // Jawne udostępnienie funkcji dla pozostałych przycisków HTML.
 window.editParticipant = editParticipant;
