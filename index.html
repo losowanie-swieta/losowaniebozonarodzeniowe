@@ -128,6 +128,7 @@
     <div class="notice">
       <b>Twoje zapisane losowania</b>
       <div class="small">Otwórz wcześniejsze losowanie albo usuń testowe, których już nie potrzebujesz.</div>
+      <div id="savedGameCodeBox" class="notice hidden" style="margin-top:12px"><b>Otwieranie zapisanego losowania</b><div class="small">Wpisz kod administratora użyty przy tworzeniu tego losowania.</div><input id="savedGameCodeInput" type="password" placeholder="Kod administratora" autocomplete="off"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="primary" onclick="confirmOpenSavedGame()">Otwórz losowanie</button><button type="button" class="secondary" onclick="cancelOpenSavedGame()">Anuluj</button></div></div>
       <div id="savedGames" style="margin-top:12px">Wczytywanie zapisanych losowań…</div>
       <button class="secondary" onclick="loadSavedGames()">↻ Odśwież listę</button>
     </div>
@@ -320,16 +321,32 @@ async function loadSavedGames(){
       <div class="participant">
         <span><b>${escapeHtml(g.name)}</b><br><span class="family">${new Date(g.created_at).toLocaleString("pl-PL")}</span></span>
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
-          <button class="secondary smallbtn" onclick="removeSavedGame('${g.id}','${escapeHtml(g.name).replace(/'/g,"&#039;")}')">🗑️ Usuń</button>
+          <button type="button" class="secondary smallbtn" onclick="openSavedGame('${g.id}')">📂 Otwórz</button>
+          <button type="button" class="secondary smallbtn" onclick="removeSavedGame('${g.id}','${escapeHtml(g.name).replace(/'/g,"&#039;")}')">🗑️ Usuń</button>
         </span>
       </div>`).join("");
   }catch(e){box.innerHTML='<div class="notice error">Nie udało się wczytać listy: '+escapeHtml(e.message)+'</div>';}
 }
 
-async function openSavedGame(id){
-  const code=prompt("Wpisz kod administratora dla tego losowania:");
-  if(code===null)return;
+let pendingSavedGameId=null;
+function openSavedGame(id){
+  pendingSavedGameId=id;
+  const box=document.getElementById("savedGameCodeBox");
+  box.classList.remove("hidden");
+  document.getElementById("savedGameCodeInput").value="";
+  document.getElementById("savedGameCodeInput").focus();
+  box.scrollIntoView({behavior:"smooth",block:"center"});
+}
+function cancelOpenSavedGame(){
+  pendingSavedGameId=null;
+  document.getElementById("savedGameCodeBox").classList.add("hidden");
+}
+async function confirmOpenSavedGame(){
+  const id=pendingSavedGameId;
+  const code=document.getElementById("savedGameCodeInput").value.trim();
+  if(!id)return;
+  if(!code){message("Wpisz kod administratora tego losowania.",true);return;}
+  document.getElementById("savedGameCodeBox").classList.add("hidden");
   try{
     const data=await rpc("get_participants",{p_game_id:id,p_admin_code:code});
     gameId=id;adminCode=code;participants=data||[];
@@ -342,6 +359,7 @@ async function openSavedGame(id){
     await refreshParticipants();
     if (participants.length >= 2) await showPrivateLinks();
     message("Otwarto zapisane losowanie. Zapisane indywidualne linki są dostępne poniżej.");
+    pendingSavedGameId=null;
   }catch(e){message("Nie udało się otworzyć losowania. Sprawdź kod administratora. "+e.message,true);}
 }
 
