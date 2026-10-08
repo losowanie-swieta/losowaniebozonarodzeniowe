@@ -432,7 +432,17 @@ async function refreshParticipants(){
       </div>`
     ).join("");
   }
-  document.getElementById("drawBtn").disabled=participants.length<2;
+  // Jeśli wyniki są już zapisane, nie pozwalaj uruchomić losowania ponownie.
+  const alreadyDrawn = participants.length >= 2 && participants.every(p => !!p.assigned_to);
+  const drawBtn = document.getElementById("drawBtn");
+  drawBtn.disabled = participants.length < 2 || alreadyDrawn;
+  drawBtn.textContent = alreadyDrawn ? "✅ Losowanie już wykonane" : "🎲 Wykonaj losowanie";
+  if (alreadyDrawn) {
+    // Po ponownym otwarciu zapisanej gry pokaż istniejące linki z tymi samymi tokenami.
+    await showPrivateLinks();
+  } else {
+    document.getElementById("linksPanel").classList.add("hidden");
+  }
 }
 
 async function showPrivateLinks(){
@@ -465,11 +475,17 @@ function copyText(text){
 }
 
 async function drawGame(){
-  if(!confirm("Czy na pewno rozpocząć losowanie? Po rozpoczęciu wyniki zostaną ustalone.")) return;
+  // Dodatkowa kontrola po stronie strony — nie wywołuj RPC ponownie po wykonanym losowaniu.
+  if (participants.length >= 2 && participants.every(p => !!p.assigned_to)) {
+    message("To losowanie zostało już wykonane. Wyniki i indywidualne linki pozostają bez zmian.");
+    await showPrivateLinks();
+    return;
+  }
+  if(!confirm("Czy na pewno rozpocząć losowanie? Po rozpoczęciu wyniki zostaną ustalone i nie należy go powtarzać.")) return;
   try{
     await rpc("draw_game",{p_game_id:gameId,p_admin_code:adminCode});
-    message("🎉 Losowanie zakończone! Każdy uczestnik ma teraz własny, prywatny link.");
-    document.getElementById("drawBtn").disabled=true;
+    await refreshParticipants();
+    message("🎉 Losowanie zakończone! Linki uczestników zostały zapisane.");
     await showPrivateLinks();
   }catch(e){message("Nie udało się wykonać losowania: "+e.message,true);}
 }
