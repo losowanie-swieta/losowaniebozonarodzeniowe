@@ -340,7 +340,8 @@ async function openSavedGame(id){
     const url=new URL(location.href);url.search="";url.hash="game="+gameId;
     document.getElementById("shareLink").textContent=url.toString();
     await refreshParticipants();
-    message("Otwarto zapisane losowanie.");
+    if (participants.length >= 2) await showPrivateLinks();
+    message("Otwarto zapisane losowanie. Zapisane indywidualne linki są dostępne poniżej.");
   }catch(e){message("Nie udało się otworzyć losowania. Sprawdź kod administratora. "+e.message,true);}
 }
 
@@ -437,8 +438,9 @@ async function refreshParticipants(){
   const drawBtn = document.getElementById("drawBtn");
   drawBtn.disabled = participants.length < 2 || alreadyDrawn;
   drawBtn.textContent = alreadyDrawn ? "✅ Losowanie już wykonane" : "🎲 Wykonaj losowanie";
-  if (alreadyDrawn) {
-    // Po ponownym otwarciu zapisanej gry pokaż istniejące linki z tymi samymi tokenami.
+  // Pokaż zapisane linki również przy ponownym otwarciu gry.
+  // Tokeny uczestników są stałe w bazie; ponowne pobranie nie tworzy nowych linków.
+  if (participants.length >= 2) {
     await showPrivateLinks();
   } else {
     document.getElementById("linksPanel").classList.add("hidden");
